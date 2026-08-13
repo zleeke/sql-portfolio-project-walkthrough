@@ -33,11 +33,11 @@ qualify
 -- Spot check individual tickets to understand what is happening in the data
 select
     tickets.ticket_id
-    , tickets.initial_rep
+    , tickets.initial_rep_employee_id
     , tickets.opened_at
     , ticket_notes.note_id
     , ticket_notes.note_type
-    , ticket_notes.rep_name
+    , ticket_notes.employee_id
     , ticket_notes.created_at
 from tickets as tickets
     inner join ticket_notes as ticket_notes
@@ -53,11 +53,11 @@ escalations AS (
         tickets.ticket_id
         , escalations.note_id
         , tickets.opened_at
-        , tickets.customer_name
+        , tickets.customer_id
         , tickets.product
-        , tickets.initial_rep
+        , tickets.initial_rep_employee_id
         , escalations.note_type
-        , escalations.rep_name as escalation_rep
+        , escalations.employee_id as escalation_rep
         , escalations.created_at as escalation_tstmp
         , COALESCE(
             lag(escalations.created_at) over (partition by tickets.ticket_id order by escalations.created_at desc),
@@ -76,13 +76,13 @@ escalations AS (
         escalations.ticket_id
         , escalations.note_id
         , escalations.opened_at
-        , escalations.customer_name
+        , escalations.customer_id
         , escalations.product
-        , escalations.initial_rep
+        , escalations.initial_rep_employee_id
         , escalations.escalation_rep
         , escalations.escalation_tstmp
         , case when ticket_notes.created_at is not null then 'Y' else 'N' end as escalation_resolved_ind
-        , ticket_notes.rep_name as escalation_resolved_rep
+        , ticket_notes.employee_id as escalation_resolved_rep
         , ticket_notes.created_at as escalation_resolved_tstmp
         , case when ticket_notes.created_at is null then EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - escalations.escalation_tstmp)) / 3600.0 else EXTRACT(EPOCH FROM (ticket_notes.created_at - escalations.escalation_tstmp)) / 3600.0 end AS service_level_hours
         , case when service_level_hours <= 48 then 'Y' else 'N'

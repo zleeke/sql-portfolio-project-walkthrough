@@ -14,11 +14,41 @@ CLI, and is well supported by SQL extensions in VS Code.
 ## The business scenario
 
 Imagine a **team-based support desk** where no single rep owns a ticket
-end-to-end — a ticket's `initial_rep` (who took the first note) is frequently
-not the same rep handling it later (`ticket_notes.rep_name` can differ note
-to note). Every ticket accumulates **notes** over time, tagged with a
-`note_type` (`general`, `escalation`, `escalation_resolved`, `follow_up`,
-`resolution`).
+end-to-end. Every ticket accumulates **notes** over time, tagged with a
+`note_type` (`general`, `escalation`, `escalation_resolved`, `follow_up`).
+Reps roll up through an org hierarchy (rep -> first-line leader -> second-line
+leader), and every ticket belongs to a customer with their own tenure and
+location, so the data supports more than just the escalation report below --
+team/manager rollups, customer-tenure analysis, repeat-customer behavior, etc.
+
+## Data model
+
+- **employee** — `employee_id` PK, `employee_name`, `role`
+  (`rep` / `first_line_leader` / `second_line_leader`), plus flattened
+  hierarchy columns `first_line_leader_id` and `second_line_leader_id`
+  (reps have both set, first-line leaders have only the second, second-line
+  leaders have neither). ~100 reps / 15 first-line leaders / 3 second-line
+  leaders.
+- **customer** — `customer_id` PK, `customer_name`, `city`, `state`,
+  `email`, `customer_since`. Smaller than the ticket count on purpose, so
+  repeat customers show up (~37K distinct customers across ~104K tickets).
+- **tickets** — `ticket_id` PK, `customer_id` FK, `product`, `opened_at`,
+  `status` (`new` / `pending` / `closed`), `initial_rep_employee_id` FK.
+- **ticket_notes** — `note_id` PK, `ticket_id` FK, `employee_id` FK,
+  `note_type` (`general` / `escalation` / `escalation_resolved` /
+  `follow_up`), `note_text`, `created_at`.
+
+`tickets.status` is derived purely from note history rather than picked at
+random:
+
+- **new** — the ticket has exactly one note (its initial note) so far.
+- **closed** — if the ticket has any escalation(s), only once every
+  escalation has a matching `escalation_resolved` note. If the ticket never
+  escalated, an age-based probability decides closed vs. pending (older
+  tickets are more likely closed).
+- **pending** — everything else.
+
+## The escalation SLA report
 
 The desk has a **48-hour SLO** for addressing an escalation once it's raised.
 Leadership doesn't just want a list of "tickets that got escalated" — they
@@ -72,18 +102,18 @@ sql-return-latest-example/
    pip install -r requirements.txt
    ```
 
-2. Generate the synthetic data (10,000 tickets, plus a variable number of
-   notes per ticket):
+2. Generate the synthetic data (~104K tickets, plus employees, customers,
+   and a variable number of notes per ticket):
 
    ```bash
    python scripts/generate_data.py
    ```
 
-   This writes `data/tickets.csv` and `data/ticket_notes.csv`. The script is
-   seeded (`Faker.seed(42)` / `random.seed(42)`) so the random portion of the
-   data is reproducible, and it always injects five hand-crafted "demo"
-   tickets (IDs 1–5) whose note timing intentionally exercises the edge cases
-   described above.
+   This writes `data/employee.csv`, `data/customer.csv`, `data/tickets.csv`,
+   and `data/ticket_notes.csv`. The script is seeded (`Faker.seed(42)` /
+   `random.seed(42)`) so the random portion of the data is reproducible, and
+   it always injects six hand-crafted "demo" tickets (IDs 1–6) whose note
+   timing intentionally exercises the edge cases described above.
 
 3. Install a DuckDB SQL extension in VS Code (search the Extensions
    marketplace for "DuckDB"), or use the [DuckDB CLI](https://duckdb.org/docs/api/cli/overview).
@@ -115,17 +145,17 @@ couple of control cases:
 | 5         | no escalation notes at all                              | control — should NOT appear |
 | 6         | first escalation resolved within SLO, second escalated 40 hours ago and still open | first escalation healthy, second is **At risk** — proves each escalation is paired with its own resolution |
 
-The remaining ~9,994 randomly generated tickets follow a coherent note
-lifecycle (`general` -> optional `escalation` -> optional
-`escalation_resolved` -> optional `follow_up`(s) -> optional `resolution`),
-with `status` derived from whether/when a resolution note exists, and reps
-drawn from a fixed pool of 20 to simulate the team-based contact center.
-About 10% of escalated tickets get re-escalated a second time, and a small
-share (~2.5%) of resolved escalations log a duplicate `escalation_resolved`
-note shortly after the first, simulating messy real-world contact-center
-data entry. Because this data is regenerated relative to "today," re-run
-`scripts/generate_data.py` periodically to keep a healthy number of
-escalations landing in each SLO bucket.
+The remaining tickets are randomly generated and follow a coherent note
+lifecycle (`general` -> optional `escalation` episode(s) -> optional
+`follow_up`(s)), with `status` derived from that history as described above,
+and notes authored by reps drawn from a fixed pool of 100 (rolling up to 15
+first-line leaders and 3 second-line leaders) to simulate the team-based
+contact center. About 10% of escalated tickets get re-escalated a second
+time, and a small share (~2.5%) of resolved escalations log a duplicate
+`escalation_resolved` note shortly after the first, simulating messy
+real-world contact-center data entry. Because this data is regenerated
+relative to "today," re-run `scripts/generate_data.py` periodically to keep
+a healthy number of escalations landing in each SLO bucket.
 
 ## Why `QUALIFY` matters
 

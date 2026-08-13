@@ -22,9 +22,9 @@ WITH escalation_resolution_pairs AS (
     SELECT
         e.ticket_id
         , e.note_id AS escalation_note_id
-        , e.rep_name AS escalated_by
+        , e.employee_id AS escalated_by_employee_id
         , e.created_at AS escalation_at
-        , r.rep_name AS resolved_by
+        , r.employee_id AS resolved_by_employee_id
         , r.created_at AS resolved_at
     FROM ticket_notes AS e
         LEFT JOIN ticket_notes AS r
@@ -41,12 +41,12 @@ WITH escalation_resolution_pairs AS (
 , classified AS (
     SELECT
         pairs.ticket_id
-        , tickets.customer_name
+        , customer.customer_name
         , tickets.product
         , tickets.status
-        , pairs.escalated_by
+        , escalated_by.employee_name AS escalated_by
         , pairs.escalation_at
-        , pairs.resolved_by
+        , resolved_by.employee_name AS resolved_by
         , pairs.resolved_at
         , DATE_DIFF('hour', pairs.escalation_at, COALESCE(pairs.resolved_at, CURRENT_TIMESTAMP)) AS hours_since_escalation
         , CASE
@@ -54,10 +54,10 @@ WITH escalation_resolution_pairs AS (
                  AND DATE_DIFF('hour', pairs.escalation_at, pairs.resolved_at) > 48
                 THEN 'Resolved late (outside 48h SLO)'
             -- An escalation with no escalation_resolved note on a ticket that's
-            -- already closed/resolved isn't actionable - treat it as healthy
-            -- rather than flagging a ticket nobody is going to look at again.
+            -- already closed isn't actionable - treat it as healthy rather
+            -- than flagging a ticket nobody is going to look at again.
             WHEN pairs.resolved_at IS NULL
-                 AND tickets.status NOT IN ('open', 'pending')
+                 AND tickets.status = 'closed'
                 THEN 'Within SLO'
             WHEN pairs.resolved_at IS NULL
                  AND DATE_DIFF('hour', pairs.escalation_at, CURRENT_TIMESTAMP) >= 48
@@ -70,6 +70,12 @@ WITH escalation_resolution_pairs AS (
     FROM escalation_resolution_pairs AS pairs
         INNER JOIN tickets AS tickets
             ON tickets.ticket_id = pairs.ticket_id
+        INNER JOIN customer AS customer
+            ON customer.customer_id = tickets.customer_id
+        INNER JOIN employee AS escalated_by
+            ON escalated_by.employee_id = pairs.escalated_by_employee_id
+        LEFT JOIN employee AS resolved_by
+            ON resolved_by.employee_id = pairs.resolved_by_employee_id
 )
 SELECT *
 FROM classified

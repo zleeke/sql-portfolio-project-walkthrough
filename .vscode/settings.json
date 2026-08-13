@@ -1,0 +1,7 @@
+{
+  "sqltools.useNodeRuntime": true,
+  "sqltools.disableNodeDetectNotifications": true,
+  "sqltools.autoOpenSessionFiles": false,
+  "sqltools.results.limit": 10000,
+  "sqltools.results.location": "current"
+}

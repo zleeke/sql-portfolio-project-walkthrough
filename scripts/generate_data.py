@@ -28,7 +28,7 @@ to query against.
 
 import csv
 import random
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from faker import Faker
@@ -49,8 +49,8 @@ Faker.seed(SEED)
 random.seed(SEED)
 
 
-def days_ago(n: int) -> date:
-    return date.today() - timedelta(days=n)
+def days_ago(n: int) -> datetime:
+    return datetime.now() - timedelta(days=n)
 
 
 def build_curated_tickets():
@@ -128,7 +128,7 @@ def build_random_tickets(start_id: int, count: int):
     notes = []
 
     for ticket_id in range(start_id, start_id + count):
-        opened_at = fake.date_between(start_date="-2y", end_date="-60d")
+        opened_at = fake.date_time_between(start_date="-2y", end_date="-60d")
         tickets.append(
             {
                 "ticket_id": ticket_id,
@@ -141,7 +141,7 @@ def build_random_tickets(start_id: int, count: int):
 
         num_notes = random.choices([0, 1, 2, 3, 4], weights=[0.15, 0.35, 0.25, 0.15, 0.10])[0]
         for _ in range(num_notes):
-            note_date = fake.date_between(start_date=opened_at, end_date="today")
+            note_date = fake.date_time_between(start_date=opened_at, end_date="now")
             notes.append(
                 {
                     "ticket_id": ticket_id,

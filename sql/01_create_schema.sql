@@ -8,7 +8,7 @@ CREATE TABLE tickets (
     ticket_id     INTEGER PRIMARY KEY,
     customer_name VARCHAR NOT NULL,
     product       VARCHAR NOT NULL,
-    opened_at     DATE NOT NULL,
+    opened_at     TIMESTAMP NOT NULL,
     status        VARCHAR NOT NULL
 );
 
@@ -17,5 +17,5 @@ CREATE TABLE ticket_notes (
     ticket_id  INTEGER NOT NULL REFERENCES tickets (ticket_id),
     note_type  VARCHAR NOT NULL, -- 'general' | 'escalation' | 'follow_up' | 'resolution'
     note_text  VARCHAR NOT NULL,
-    created_at DATE NOT NULL
+    created_at TIMESTAMP NOT NULL
 );

@@ -37,16 +37,16 @@ SEED = 42
 TOTAL_TICKETS = 10_000
 CURATED_TICKET_IDS = {1, 2, 3, 4, 5}
 
-NOTE_TYPES = ["general", "escalation", "follow_up", "resolution"]
-NOTE_TYPE_WEIGHTS = [0.55, 0.15, 0.20, 0.10]
 PRODUCTS = ["Billing", "Mobile App", "Website", "API", "Hardware"]
-STATUSES = ["open", "pending", "resolved", "closed"]
+REP_COUNT = 20  # simulates a team-based contact center (no single rep owns a ticket)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 fake = Faker()
 Faker.seed(SEED)
 random.seed(SEED)
+
+REPS = [fake.name() for _ in range(REP_COUNT)]
 
 
 def days_ago(n: int) -> datetime:
@@ -55,6 +55,8 @@ def days_ago(n: int) -> datetime:
 
 def build_curated_tickets():
     """Hand-crafted tickets/notes that exercise the 45-day-window edge cases."""
+    reps = REPS[:5]  # ticket N's initial rep is reps[N-1]
+
     tickets = [
         {
             "ticket_id": 1,
@@ -62,6 +64,7 @@ def build_curated_tickets():
             "product": "Billing",
             "opened_at": days_ago(90),
             "status": "open",
+            "initial_rep": reps[0],
         },
         {
             "ticket_id": 2,
@@ -69,6 +72,7 @@ def build_curated_tickets():
             "product": "Mobile App",
             "opened_at": days_ago(60),
             "status": "pending",
+            "initial_rep": reps[1],
         },
         {
             "ticket_id": 3,
@@ -76,6 +80,7 @@ def build_curated_tickets():
             "product": "Website",
             "opened_at": days_ago(80),
             "status": "resolved",
+            "initial_rep": reps[2],
         },
         {
             "ticket_id": 4,
@@ -83,6 +88,7 @@ def build_curated_tickets():
             "product": "API",
             "opened_at": days_ago(15),
             "status": "open",
+            "initial_rep": reps[3],
         },
         {
             "ticket_id": 5,
@@ -90,66 +96,117 @@ def build_curated_tickets():
             "product": "Hardware",
             "opened_at": days_ago(30),
             "status": "closed",
+            "initial_rep": reps[4],
         },
     ]
 
     notes = [
         # Ticket 1: initial escalation outside the window (47d), second one inside (35d).
-        {"ticket_id": 1, "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(89)},
-        {"ticket_id": 1, "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(47)},
-        {"ticket_id": 1, "note_type": "escalation", "note_text": "Escalated to tier 3.", "created_at": days_ago(35)},
-        {"ticket_id": 1, "note_type": "follow_up", "note_text": "Checked in with customer.", "created_at": days_ago(20)},
+        {"ticket_id": 1, "rep_name": reps[0], "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(89)},
+        {"ticket_id": 1, "rep_name": REPS[5], "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(47)},
+        {"ticket_id": 1, "rep_name": REPS[6], "note_type": "escalation", "note_text": "Escalated to tier 3.", "created_at": days_ago(35)},
+        {"ticket_id": 1, "rep_name": REPS[5], "note_type": "follow_up", "note_text": "Checked in with customer.", "created_at": days_ago(20)},
 
         # Ticket 2: single escalation inside the window (40d).
-        {"ticket_id": 2, "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(58)},
-        {"ticket_id": 2, "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(40)},
+        {"ticket_id": 2, "rep_name": reps[1], "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(58)},
+        {"ticket_id": 2, "rep_name": REPS[7], "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(40)},
 
         # Ticket 3: single escalation outside the window (50d).
-        {"ticket_id": 3, "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(79)},
-        {"ticket_id": 3, "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(50)},
-        {"ticket_id": 3, "note_type": "resolution", "note_text": "Issue resolved.", "created_at": days_ago(40)},
+        {"ticket_id": 3, "rep_name": reps[2], "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(79)},
+        {"ticket_id": 3, "rep_name": REPS[8], "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(50)},
+        {"ticket_id": 3, "rep_name": REPS[8], "note_type": "resolution", "note_text": "Issue resolved.", "created_at": days_ago(40)},
 
         # Ticket 4: initial escalation inside the window (10d), second one even more recent (2d).
-        {"ticket_id": 4, "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(14)},
-        {"ticket_id": 4, "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(10)},
-        {"ticket_id": 4, "note_type": "escalation", "note_text": "Escalated to tier 3.", "created_at": days_ago(2)},
+        {"ticket_id": 4, "rep_name": reps[3], "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(14)},
+        {"ticket_id": 4, "rep_name": REPS[9], "note_type": "escalation", "note_text": "Escalated to tier 2.", "created_at": days_ago(10)},
+        {"ticket_id": 4, "rep_name": REPS[10], "note_type": "escalation", "note_text": "Escalated to tier 3.", "created_at": days_ago(2)},
 
         # Ticket 5: no escalation notes at all.
-        {"ticket_id": 5, "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(29)},
-        {"ticket_id": 5, "note_type": "follow_up", "note_text": "Checked in with customer.", "created_at": days_ago(20)},
-        {"ticket_id": 5, "note_type": "resolution", "note_text": "Issue resolved.", "created_at": days_ago(5)},
+        {"ticket_id": 5, "rep_name": reps[4], "note_type": "general", "note_text": "Customer reported issue.", "created_at": days_ago(29)},
+        {"ticket_id": 5, "rep_name": REPS[11], "note_type": "follow_up", "note_text": "Checked in with customer.", "created_at": days_ago(20)},
+        {"ticket_id": 5, "rep_name": REPS[11], "note_type": "resolution", "note_text": "Issue resolved.", "created_at": days_ago(5)},
     ]
 
     return tickets, notes
 
 
 def build_random_tickets(start_id: int, count: int):
+    """Builds tickets whose notes follow a coherent lifecycle (general ->
+    optional escalation -> optional follow-ups -> optional resolution), with
+    `status` derived from what actually happened rather than picked at random.
+    """
     tickets = []
     notes = []
 
     for ticket_id in range(start_id, start_id + count):
         opened_at = fake.date_time_between(start_date="-2y", end_date="-60d")
+        initial_rep = random.choice(REPS)
+        age_days = (datetime.now() - opened_at).days
+
+        ticket_notes = [
+            {
+                "note_type": "general",
+                "note_text": fake.sentence(nb_words=8),
+                "created_at": opened_at + timedelta(hours=random.uniform(0, 4)),
+                "rep_name": initial_rep,
+            }
+        ]
+
+        if random.random() < 0.20:  # some tickets get escalated
+            ticket_notes.append(
+                {
+                    "note_type": "escalation",
+                    "note_text": fake.sentence(nb_words=8),
+                    "created_at": ticket_notes[-1]["created_at"] + timedelta(days=random.uniform(1, 10)),
+                    "rep_name": random.choice(REPS),
+                }
+            )
+
+        num_follow_ups = random.choices([0, 1, 2], weights=[0.5, 0.35, 0.15])[0]
+        for _ in range(num_follow_ups):
+            ticket_notes.append(
+                {
+                    "note_type": "follow_up",
+                    "note_text": fake.sentence(nb_words=8),
+                    "created_at": ticket_notes[-1]["created_at"] + timedelta(days=random.uniform(1, 7)),
+                    "rep_name": random.choice(REPS),
+                }
+            )
+
+        # Older tickets are more likely to have reached a terminal resolution.
+        resolve_probability = min(0.9, 0.3 + (age_days / 365) * 0.5)
+        resolved = random.random() < resolve_probability
+        if resolved:
+            ticket_notes.append(
+                {
+                    "note_type": "resolution",
+                    "note_text": fake.sentence(nb_words=8),
+                    "created_at": ticket_notes[-1]["created_at"] + timedelta(days=random.uniform(0.5, 5)),
+                    "rep_name": random.choice(REPS),
+                }
+            )
+            status = random.choices(["resolved", "closed"], weights=[0.4, 0.6])[0]
+        else:
+            status = random.choices(["open", "pending"], weights=[0.5, 0.5])[0]
+
+        now = datetime.now()
+        for note in ticket_notes:
+            if note["created_at"] > now:
+                note["created_at"] = now
+
         tickets.append(
             {
                 "ticket_id": ticket_id,
                 "customer_name": fake.name(),
                 "product": random.choice(PRODUCTS),
                 "opened_at": opened_at,
-                "status": random.choice(STATUSES),
+                "status": status,
+                "initial_rep": initial_rep,
             }
         )
 
-        num_notes = random.choices([0, 1, 2, 3, 4], weights=[0.15, 0.35, 0.25, 0.15, 0.10])[0]
-        for _ in range(num_notes):
-            note_date = fake.date_time_between(start_date=opened_at, end_date="now")
-            notes.append(
-                {
-                    "ticket_id": ticket_id,
-                    "note_type": random.choices(NOTE_TYPES, weights=NOTE_TYPE_WEIGHTS)[0],
-                    "note_text": fake.sentence(nb_words=8),
-                    "created_at": note_date,
-                }
-            )
+        for note in ticket_notes:
+            notes.append({"ticket_id": ticket_id, **note})
 
     return tickets, notes
 
@@ -178,12 +235,12 @@ def main():
     write_csv(
         DATA_DIR / "tickets.csv",
         all_tickets,
-        fieldnames=["ticket_id", "customer_name", "product", "opened_at", "status"],
+        fieldnames=["ticket_id", "customer_name", "product", "opened_at", "status", "initial_rep"],
     )
     write_csv(
         DATA_DIR / "ticket_notes.csv",
         all_notes,
-        fieldnames=["note_id", "ticket_id", "note_type", "note_text", "created_at"],
+        fieldnames=["note_id", "ticket_id", "rep_name", "note_type", "note_text", "created_at"],
     )
 
     print(f"Wrote {len(all_tickets):,} tickets to {DATA_DIR / 'tickets.csv'}")

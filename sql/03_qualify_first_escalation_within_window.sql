@@ -32,3 +32,40 @@ ORDER BY n.created_at DESC;
 --                                                   note only 35 days ago
 --   ticket_id 3 (first escalation 50 days ago)  -> excluded
 --   ticket_id 5 (no escalation notes)           -> excluded
+
+SELECT
+    tickets.ticket_id
+    , tickets.customer_name
+    , tickets.product
+    , ticket_notes.created_at
+    , COUNT(tickets.ticket_id) OVER (PARTITION BY tickets.ticket_id) AS ticket_count
+FROM 
+    tickets as tickets 
+    INNER JOIN
+        ticket_notes as ticket_notes 
+            ON tickets.ticket_id = ticket_notes.ticket_id 
+            and ticket_notes.note_type = 'escalation'
+-- QUALIFY
+--     ticket_count > 1
+;
+
+SELECT
+    tickets.ticket_id
+    , ticket_notes.note_id
+    , tickets.customer_name
+    , tickets.product
+    , ticket_notes.created_at
+FROM 
+    tickets as tickets 
+    INNER JOIN
+        ticket_notes as ticket_notes 
+            ON tickets.ticket_id = ticket_notes.ticket_id 
+            and ticket_notes.note_type = 'escalation'
+WHERE 
+    tickets.status = 'pending'
+QUALIFY
+    ROW_NUMBER() OVER (PARTITION BY tickets.ticket_id ORDER BY ticket_notes.created_at asc) = 1
+    AND ticket_notes.created_at::DATE >= CURRENT_DATE - 45
+;
+
+

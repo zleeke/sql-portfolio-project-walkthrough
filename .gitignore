@@ -3,6 +3,9 @@ data/*.csv
 db/*.duckdb
 db/*.duckdb.wal
 
+# Personal video script notes, not for public repo
+tutorial_script.md
+
 # Python
 .venv/
 __pycache__/

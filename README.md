@@ -17,29 +17,34 @@ Imagine a **team-based support desk** where no single rep owns a ticket
 end-to-end — a ticket's `initial_rep` (who took the first note) is frequently
 not the same rep handling it later (`ticket_notes.rep_name` can differ note
 to note). Every ticket accumulates **notes** over time, tagged with a
-`note_type` (`general`, `escalation`, `follow_up`, `resolution`).
+`note_type` (`general`, `escalation`, `escalation_resolved`, `follow_up`,
+`resolution`).
 
-Leadership wants an early-warning report of **at-risk, potential-churn
-tickets**: tickets that are still unresolved (`status` = `open` or `pending`)
-whose **first escalation note** was logged within the **last 7 days** — i.e.
-"recently escalated for the first time, and still not resolved."
+The desk has a **48-hour SLO** for addressing an escalation once it's raised.
+Leadership doesn't just want a list of "tickets that got escalated" — they
+want every escalation classified into one of three actionable buckets:
+
+1. **At risk** — not yet resolved, still inside the 48-hour SLO, but old
+   enough (32+ hours) that it needs attention *now* before it breaches.
+2. **Resolved late** — an `escalation_resolved` note exists, but it landed
+   more than 48 hours after the escalation.
+3. **Breached, still unresolved** — no `escalation_resolved` note, and the
+   48-hour SLO has already passed.
 
 This sounds simple until you consider: a ticket can be escalated more than
-once. A ticket whose *first* escalation happened 90 days ago and just got
-escalated *again* this week is a different situation than one being escalated
-for the very first time this week — but a plain `WHERE created_at >= today -
-7` on escalation notes can't distinguish the two. Only looking at "does this
-ticket have any escalation note in the last 7 days" would incorrectly lump
-both cases together.
+once, and each escalation needs to be matched to *its own* resolution — not
+just "has this ticket ever had a resolved escalation." A ticket whose first
+escalation was closed out cleanly last month but has since been escalated
+again is a very different situation from one that's never been resolved at
+all, even though both technically "have a resolved escalation somewhere in
+their history."
 
-This is exactly the class of problem `QUALIFY` + `ROW_NUMBER()` is built for:
-rank each ticket's escalation notes by date, keep only the earliest one per
-ticket (`row_num = 1`), and filter that row by date — all in one query, no
-nested subquery required. The report in
-[sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql)
-further prioritizes results by `escalation_count` (repeat escalations are a
-bigger red flag) and `ticket_age_days` (a long-open ticket that's now
-escalating is riskier than a brand-new one).
+This is exactly the class of problem `QUALIFY` + window functions is built
+for: pair each escalation note with the *next* `escalation_resolved` note
+that follows it (per ticket), then classify the pair by how much time
+elapsed relative to the 48-hour SLO. The report in
+[sql/03_escalation_sla_status.sql](sql/03_escalation_sla_status.sql) does
+exactly that.
 
 ## Project structure
 
@@ -50,11 +55,9 @@ sql-return-latest-example/
 ├── scripts/
 │   └── generate_data.py        # Faker-based synthetic data generator
 ├── sql/
-│   ├── 01_create_schema.sql    # table definitions
-│   ├── 02_load_data.sql        # loads the generated CSVs into DuckDB
-│   ├── 03_qualify_first_escalation_within_window.sql   # the main demo
-│   ├── 04_equivalent_without_qualify.sql                # same result, no QUALIFY
-│   └── 05_bonus_qualify_patterns.sql                    # more "latest N" examples
+│   ├── 01_create_schema.sql        # table definitions
+│   ├── 02_load_data.sql            # loads the generated CSVs into DuckDB
+│   └── 03_escalation_sla_status.sql  # the main demo: 48h escalation SLO report
 ├── data/                        # generated CSVs land here (gitignored)
 └── db/                          # the DuckDB database file lands here (gitignored)
 ```
@@ -94,80 +97,87 @@ sql-return-latest-example/
    duckdb db/support_tickets.duckdb
    .read sql/01_create_schema.sql
    .read sql/02_load_data.sql
-   .read sql/03_qualify_first_escalation_within_window.sql
-   .read sql/04_equivalent_without_qualify.sql
-   .read sql/05_bonus_qualify_patterns.sql
+   .read sql/03_escalation_sla_status.sql
    ```
 
 ## The demo tickets
 
-Five hand-crafted tickets (IDs 1-5) are always present, with note timing fixed
-relative to "today" so they reliably exercise **first-occurrence-within-a-window**
-edge cases (a ticket escalated more than once, where only the *first*
-escalation date should determine whether it counts):
+Six hand-crafted tickets (IDs 1-6) are always present, with note timing fixed
+relative to "today" so they reliably exercise all three SLO buckets plus a
+couple of control cases:
 
-| ticket_id | escalation note timing              | initial escalation age |
-|-----------|--------------------------------------|-----------------------------|
-| 1         | first 47 days ago, second 35 days ago | 47 days — outside a 45-day window |
-| 2         | single escalation, 40 days ago        | 40 days — inside a 45-day window |
-| 3         | single escalation, 50 days ago        | 50 days — outside a 45-day window |
-| 4         | first 10 days ago, second 2 days ago  | 10 days — inside a 45-day window |
-| 5         | no escalation notes at all            | n/a |
+| ticket_id | escalation timing                                   | outcome |
+|-----------|-------------------------------------------------------|---------|
+| 1         | escalated 40 hours ago, still unresolved               | **At risk** — past the 32h threshold, inside the 48h SLO |
+| 2         | escalated 200 hours ago, resolved 100 hours ago         | **Resolved late** — took 100h, outside the 48h SLO |
+| 3         | escalated 120 hours ago, still unresolved               | **Breached** — past the 48h SLO, unresolved |
+| 4         | escalated 50 hours ago, resolved 20 hours ago           | Within SLO (control — resolved in 30h, should NOT appear) |
+| 5         | no escalation notes at all                              | control — should NOT appear |
+| 6         | first escalation resolved within SLO, second escalated 40 hours ago and still open | first escalation healthy, second is **At risk** — proves each escalation is paired with its own resolution |
 
-These fixed offsets were originally tuned for a 45-day window demo; none of
-them fall within the current 7-day at-risk report in
-[sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql),
-but they still demonstrate the core "rank and keep the first occurrence"
-pattern used throughout [sql/04_equivalent_without_qualify.sql](sql/04_equivalent_without_qualify.sql)
-and [sql/05_bonus_qualify_patterns.sql](sql/05_bonus_qualify_patterns.sql).
-The remaining ~9,995 randomly generated tickets follow a coherent note
-lifecycle (`general` -> optional `escalation` -> optional `follow_up`(s) ->
-optional `resolution`), with `status` derived from whether/when a resolution
-note exists, and reps drawn from a fixed pool of 20 to simulate the
-team-based contact center. Because this data is regenerated relative to
-"today," re-run `scripts/generate_data.py` periodically to keep a healthy
-number of tickets landing inside the 7-day at-risk window.
+The remaining ~9,994 randomly generated tickets follow a coherent note
+lifecycle (`general` -> optional `escalation` -> optional
+`escalation_resolved` -> optional `follow_up`(s) -> optional `resolution`),
+with `status` derived from whether/when a resolution note exists, and reps
+drawn from a fixed pool of 20 to simulate the team-based contact center.
+About 10% of escalated tickets get re-escalated a second time, and a small
+share (~2.5%) of resolved escalations log a duplicate `escalation_resolved`
+note shortly after the first, simulating messy real-world contact-center
+data entry. Because this data is regenerated relative to "today," re-run
+`scripts/generate_data.py` periodically to keep a healthy number of
+escalations landing in each SLO bucket.
 
 ## Why `QUALIFY` matters
 
-Without `QUALIFY`, you have to compute the window function in a CTE/subquery
-and then filter in an outer `WHERE`:
+Without `QUALIFY`, matching each escalation to its nearest following
+resolution would require computing the window function in a CTE/subquery
+and then filtering in an outer `WHERE`:
 
 ```sql
-WITH ranked AS (
+WITH candidates AS (
     SELECT
-        n.*,
+        e.ticket_id,
+        e.note_id AS escalation_note_id,
+        e.created_at AS escalation_at,
+        r.created_at AS resolved_at,
         ROW_NUMBER() OVER (
-            PARTITION BY n.ticket_id
-            ORDER BY n.created_at ASC
+            PARTITION BY e.ticket_id, e.note_id
+            ORDER BY r.created_at ASC
         ) AS rn
-    FROM ticket_notes n
-    WHERE n.note_type = 'escalation'
+    FROM ticket_notes e
+    LEFT JOIN ticket_notes r
+        ON r.ticket_id = e.ticket_id
+       AND r.note_type = 'escalation_resolved'
+       AND r.created_at > e.created_at
+    WHERE e.note_type = 'escalation'
 )
 SELECT *
-FROM ranked
-WHERE rn = 1
-  AND created_at >= CURRENT_DATE - INTERVAL 45 DAY;
+FROM candidates
+WHERE rn = 1;
 ```
 
 With `QUALIFY`, the same logic collapses into a single `SELECT`:
 
 ```sql
 SELECT
-    n.*,
+    e.ticket_id,
+    e.note_id AS escalation_note_id,
+    e.created_at AS escalation_at,
+    r.created_at AS resolved_at
+FROM ticket_notes e
+LEFT JOIN ticket_notes r
+    ON r.ticket_id = e.ticket_id
+   AND r.note_type = 'escalation_resolved'
+   AND r.created_at > e.created_at
+WHERE e.note_type = 'escalation'
+QUALIFY
     ROW_NUMBER() OVER (
-        PARTITION BY n.ticket_id
-        ORDER BY n.created_at ASC
-    ) AS rn
-FROM ticket_notes n
-WHERE n.note_type = 'escalation'
-QUALIFY rn = 1
-    AND created_at >= CURRENT_DATE - INTERVAL 45 DAY;
+        PARTITION BY e.ticket_id, e.note_id
+        ORDER BY r.created_at ASC
+    ) = 1;
 ```
 
-Both queries are included side by side in [sql/04_equivalent_without_qualify.sql](sql/04_equivalent_without_qualify.sql)
-(against the original 45-day escalation example) so you can compare them
-directly. [sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql)
-applies the same `QUALIFY` + `ROW_NUMBER()` pattern to the real at-risk-ticket
-business report described above, and [sql/05_bonus_qualify_patterns.sql](sql/05_bonus_qualify_patterns.sql)
-has a few more "latest/top-N per group" variations.
+[sql/03_escalation_sla_status.sql](sql/03_escalation_sla_status.sql) uses
+exactly this pattern to pair each escalation with its nearest resolution,
+then classifies the result against the 48-hour SLO into the three
+actionable buckets described above.

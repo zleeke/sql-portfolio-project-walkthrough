@@ -17,7 +17,7 @@ CREATE TABLE ticket_notes (
     note_id    INTEGER PRIMARY KEY,
     ticket_id  INTEGER NOT NULL REFERENCES tickets (ticket_id),
     rep_name   VARCHAR NOT NULL, -- rep who logged this specific note (may differ from tickets.initial_rep)
-    note_type  VARCHAR NOT NULL, -- 'general' | 'escalation' | 'follow_up' | 'resolution'
+    note_type  VARCHAR NOT NULL, -- 'general' | 'escalation' | 'escalation_resolved' | 'follow_up' | 'resolution'
     note_text  VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL
 );

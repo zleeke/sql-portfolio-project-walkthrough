@@ -1,6 +1,7 @@
 # Generated data and databases (reproducible via scripts/generate_data.py)
 data/*.csv
 db/*.duckdb
+db/*.duckdb.wal
 
 # Python
 .venv/

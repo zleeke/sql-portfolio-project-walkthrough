@@ -139,7 +139,9 @@ def build_random_tickets(start_id: int, count: int):
     notes = []
 
     for ticket_id in range(start_id, start_id + count):
-        opened_at = fake.date_time_between(start_date="-2y", end_date="-60d")
+        # Includes recently-opened tickets so recent-escalation scenarios
+        # (e.g. "escalated in the last 7 days") have rows to match against.
+        opened_at = fake.date_time_between(start_date="-2y", end_date="-1d")
         initial_rep = random.choice(REPS)
         age_days = (datetime.now() - opened_at).days
 

@@ -13,23 +13,33 @@ CLI, and is well supported by SQL extensions in VS Code.
 
 ## The business scenario
 
-Imagine a support desk where every ticket can accumulate multiple **notes**
-over time, tagged with a `note_type` (`general`, `escalation`, `follow_up`,
-`resolution`). Leadership wants a report of tickets whose **initial escalation
-note** was logged within the **last 45 days** — i.e. "recently escalated for
-the first time."
+Imagine a **team-based support desk** where no single rep owns a ticket
+end-to-end — a ticket's `initial_rep` (who took the first note) is frequently
+not the same rep handling it later (`ticket_notes.rep_name` can differ note
+to note). Every ticket accumulates **notes** over time, tagged with a
+`note_type` (`general`, `escalation`, `follow_up`, `resolution`).
+
+Leadership wants an early-warning report of **at-risk, potential-churn
+tickets**: tickets that are still unresolved (`status` = `open` or `pending`)
+whose **first escalation note** was logged within the **last 7 days** — i.e.
+"recently escalated for the first time, and still not resolved."
 
 This sounds simple until you consider: a ticket can be escalated more than
-once. If a ticket's *first* escalation note was logged 47 days ago, and a
-*second* escalation note was logged 35 days ago, that ticket should **not**
-appear in the report — the initial escalation is what matters, and it fell
-outside the 45-day window. Only looking at "does this ticket have any
-escalation note in the last 45 days" would incorrectly include it.
+once. A ticket whose *first* escalation happened 90 days ago and just got
+escalated *again* this week is a different situation than one being escalated
+for the very first time this week — but a plain `WHERE created_at >= today -
+7` on escalation notes can't distinguish the two. Only looking at "does this
+ticket have any escalation note in the last 7 days" would incorrectly lump
+both cases together.
 
 This is exactly the class of problem `QUALIFY` + `ROW_NUMBER()` is built for:
 rank each ticket's escalation notes by date, keep only the earliest one per
 ticket (`row_num = 1`), and filter that row by date — all in one query, no
-nested subquery required.
+nested subquery required. The report in
+[sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql)
+further prioritizes results by `escalation_count` (repeat escalations are a
+bigger red flag) and `ticket_age_days` (a long-open ticket that's now
+escalating is riskier than a brand-new one).
 
 ## Project structure
 
@@ -91,19 +101,32 @@ sql-return-latest-example/
 
 ## The demo tickets
 
-| ticket_id | escalation note timing              | expected in 45-day report? |
-|-----------|--------------------------------------|-----------------------------|
-| 1         | first 47 days ago, second 35 days ago | **No** — first escalation is outside the window |
-| 2         | single escalation, 40 days ago        | Yes |
-| 3         | single escalation, 50 days ago        | No |
-| 4         | first 10 days ago, second 2 days ago  | Yes — first escalation is inside the window |
-| 5         | no escalation notes at all            | No |
+Five hand-crafted tickets (IDs 1-5) are always present, with note timing fixed
+relative to "today" so they reliably exercise **first-occurrence-within-a-window**
+edge cases (a ticket escalated more than once, where only the *first*
+escalation date should determine whether it counts):
 
-Because the random data is regenerated relative to "today," re-run
-`scripts/generate_data.py` if you come back to this project much later and
-want the 45-day window to still line up with the demo tickets above (the
-demo tickets are always generated relative to the current date, so the table
-above holds true every time you regenerate).
+| ticket_id | escalation note timing              | initial escalation age |
+|-----------|--------------------------------------|-----------------------------|
+| 1         | first 47 days ago, second 35 days ago | 47 days — outside a 45-day window |
+| 2         | single escalation, 40 days ago        | 40 days — inside a 45-day window |
+| 3         | single escalation, 50 days ago        | 50 days — outside a 45-day window |
+| 4         | first 10 days ago, second 2 days ago  | 10 days — inside a 45-day window |
+| 5         | no escalation notes at all            | n/a |
+
+These fixed offsets were originally tuned for a 45-day window demo; none of
+them fall within the current 7-day at-risk report in
+[sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql),
+but they still demonstrate the core "rank and keep the first occurrence"
+pattern used throughout [sql/04_equivalent_without_qualify.sql](sql/04_equivalent_without_qualify.sql)
+and [sql/05_bonus_qualify_patterns.sql](sql/05_bonus_qualify_patterns.sql).
+The remaining ~9,995 randomly generated tickets follow a coherent note
+lifecycle (`general` -> optional `escalation` -> optional `follow_up`(s) ->
+optional `resolution`), with `status` derived from whether/when a resolution
+note exists, and reps drawn from a fixed pool of 20 to simulate the
+team-based contact center. Because this data is regenerated relative to
+"today," re-run `scripts/generate_data.py` periodically to keep a healthy
+number of tickets landing inside the 7-day at-risk window.
 
 ## Why `QUALIFY` matters
 
@@ -142,6 +165,9 @@ QUALIFY rn = 1
     AND created_at >= CURRENT_DATE - INTERVAL 45 DAY;
 ```
 
-Both queries are included side by side in [sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql)
-and [sql/04_equivalent_without_qualify.sql](sql/04_equivalent_without_qualify.sql)
-so you can compare them directly.
+Both queries are included side by side in [sql/04_equivalent_without_qualify.sql](sql/04_equivalent_without_qualify.sql)
+(against the original 45-day escalation example) so you can compare them
+directly. [sql/03_qualify_first_escalation_within_window.sql](sql/03_qualify_first_escalation_within_window.sql)
+applies the same `QUALIFY` + `ROW_NUMBER()` pattern to the real at-risk-ticket
+business report described above, and [sql/05_bonus_qualify_patterns.sql](sql/05_bonus_qualify_patterns.sql)
+has a few more "latest/top-N per group" variations.

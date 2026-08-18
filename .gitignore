@@ -4,7 +4,7 @@ db/*.duckdb
 db/*.duckdb.wal
 
 # Personal video script notes, not for public repo
-tutorial_script.md
+video_scripts/
 
 # Python
 .venv/

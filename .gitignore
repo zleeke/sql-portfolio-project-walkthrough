@@ -1,15 +1,6 @@
-# Generated data and databases (reproducible via scripts/generate_data.py)
-data/*.csv
-db/*.duckdb
-db/*.duckdb.wal
-
-# Personal video script notes, not for public repo
-video_scripts/
-
-# Python
-.venv/
+data/*.db
 __pycache__/
 *.pyc
-
-# OS
+.venv/
+venv/
 .DS_Store

@@ -11,8 +11,8 @@
 - I'm working on MacBook
 - I'm using GitHub to version my project and have a public repo so others can view the code I've written
 
-# My objective with this project
-- I want to use this project to demonstrate my ability to write complex SQL queries to answer realstic questions posed by a business area.
+# My objectives with this project
+- I want to use this project to demonstrate my ability to write complex SQL queries to answer realistic questions posed by a business area.
 - As you assist me with this project, here are some important guardrails you should follow:
     - Don't write the SQL queries for me. I want to do that to demonstrate my skill.
     - I do you need your assistance with building the framework for the project (folder structure, readme file, python code to generate synthetic data for the database, and database creation.)
@@ -88,6 +88,7 @@
 - Resolution-time distributions should intentionally include edge cases: comfortably within SLO, just under 48 hours, just over 48 hours, and long-unresolved/still-open escalations — to make the SQL analysis interesting.
 - Reference "as of" date: anchor to the **last day of the 6-month generation window**. All SQL that needs "today" (unresolved/at-risk calculations) uses this fixed anchor instead of the real current date, so results stay consistent over time.
 - Random seed: no preference — reproducibility across generator runs isn't required.
+- **Intentional segment-level story**: one product line and one director's team will be deliberately tuned to underperform on SLO, and another product line and director's team will be deliberately tuned to overperform, so segment-slicing queries surface a real (synthetic) business insight rather than just a flat aggregate. I'll pick the specific segments during generation and document them in the README.
 
 # Project Scope & Deliverables
 - Folder structure:
@@ -102,7 +103,8 @@ sql-portfolio-project-walkthrough/
 └── dashboard/         # HTML dashboard assets
 ```
 - The DuckDB database file (`data/support_tickets.db`) is **not** committed to the repo — it's generated on demand via script and gitignored.
-- I will write all the SQL challenge queries myself. Once written, I'll ask for the README to be updated to document/narrate each one for prospective employers.
+- I will write all the SQL challenge queries myself. The 4 business questions already listed are a starting point, not the final list — there's intentionally room for additional stretch questions (e.g., SLO trend over time, product/team performance) to showcase more SQL techniques (`QUALIFY`, CTEs, joins, `CASE` statements) beyond the original `QUALIFY`-focused idea. Recursive CTEs are optional/undecided; the `employees` table stays a flattened (non-recursive) structure regardless.
+- Once queries are written, the README should open with an executive-summary-style narrative (actual computed key findings) **and** document/narrate each query technically for prospective employers.
 - A Python `requirements.txt`/virtual environment should be set up for the generation scripts.
 
 # Scope Status
@@ -112,3 +114,15 @@ All identified gaps are resolved and the schema is fully specified in the Data M
 - **Employee hierarchy realism**: Since `supervisor_name`/`manager_name`/`director_name` are plain text fields (not FK self-joins), I'll generate a consistent reporting-tree behind the scenes (e.g., a handful of directors, each with several managers, each with several supervisors) so employees sharing a leader show identical values — rather than randomizing each employee's leader names independently. Flag it if you'd rather each employee's hierarchy values be independently randomized.
 - **Product `line`/`category` values**: I'll invent a small set of plausible product lines/categories (this is a generic contact center, not insurance-specific) since none were specified.
 - **Date range**: I'll set the 6-month window to end on the reference/anchor date and pick an arbitrary start date 6 months prior, since the exact dates don't matter.
+
+# Next Steps
+Order of operations for the project, updated as we complete each step.
+
+- [x] Lock project scope (business rules, data model, generation plan) — see sections above.
+- [x] Scaffold folder structure (`data/`, `python/`, `sql/`, `dashboard/`, `requirements.txt`, `.gitignore`, `README.md` stub).
+- [ ] Write the Python synthetic data generator (`python/`): reference data first (`customers`, `products`, `employees` incl. hierarchy tree), then `tickets` + `ticket_notes` together, applying the SLO edge-case distributions.
+- [ ] Create the DuckDB database (`data/support_tickets.db`) from the generated data, matching the locked schema.
+- [ ] Validate the generated data (row counts, escalation %, SLO compliance rate, and that business rules hold — e.g., no ticket closed with an open escalation, no concurrent open escalations per ticket).
+- [ ] Write SQL challenge queries in `sql/` (user-authored).
+- [ ] Update `README.md` to document/narrate each SQL query for prospective employers.
+- [ ] Build the HTML dashboard in `dashboard/` and host on GitHub.

@@ -17,6 +17,7 @@
     - Don't write the SQL queries for me. I want to do that to demonstrate my skill.
     - I do you need your assistance with building the framework for the project (folder structure, readme file, python code to generate synthetic data for the database, and database creation.)
     - I want a lot of opportunities throughout this project to learn something new.
+    - Always add comments to any Python scripts you write or edit, explaining what each part of the code is doing and why, so I can learn from it.
 - At the end of this project I want to have code that I can share with prospective employers so they can understand my SQL capabilities.
 - Additionally, I do want to create an HTML dashboard as well that visualizes the data in my database and host it on GitHub.
 
@@ -120,9 +121,8 @@ Order of operations for the project, updated as we complete each step.
 
 - [x] Lock project scope (business rules, data model, generation plan) — see sections above.
 - [x] Scaffold folder structure (`data/`, `python/`, `sql/`, `dashboard/`, `requirements.txt`, `.gitignore`, `README.md` stub).
-- [ ] Write the Python synthetic data generator (`python/`): reference data first (`customers`, `products`, `employees` incl. hierarchy tree), then `tickets` + `ticket_notes` together, applying the SLO edge-case distributions.
-- [ ] Create the DuckDB database (`data/support_tickets.db`) from the generated data, matching the locked schema.
-- [ ] Validate the generated data (row counts, escalation %, SLO compliance rate, and that business rules hold — e.g., no ticket closed with an open escalation, no concurrent open escalations per ticket).
+- [x] Write the Python synthetic data generator (`python/`): reference data first (`customers`, `products`, `employees` incl. hierarchy tree), then `tickets` + `ticket_notes` together, applying the SLO edge-case distributions. Run via `python python/generate_data.py`; writes CSVs to `data/` (gitignored). Segment story (underperforming/overperforming line + director) is randomized per run and printed at the end — pick a run's output to lock in before writing the README narrative.
+- [x] Create the DuckDB database (`data/support_tickets.db`) from the generated data, matching the locked schema. Run via `python python/build_database.py` (after `generate_data.py`); creates tables with PK/FK/CHECK constraints and loads the CSVs in FK-safe order.
 - [ ] Write SQL challenge queries in `sql/` (user-authored).
 - [ ] Update `README.md` to document/narrate each SQL query for prospective employers.
 - [ ] Build the HTML dashboard in `dashboard/` and host on GitHub.

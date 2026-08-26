@@ -1,101 +1,110 @@
-"""Builds the DuckDB database from the generated CSVs in `data/`.
-
-Creates `data/support_tickets.db` from scratch (overwriting any existing
-file) with the schema locked in project_context.md, then loads each CSV in
-FK-safe order: customers/products/employees, then tickets, then
-ticket_notes.
-
-Usage:
-    python python/build_database.py
-"""
-
-import os
-
 import duckdb
+from pathlib import Path
 
-import config
+# Paths relative to project root
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+DB_PATH = DATA_DIR / "support_tickets.db"
 
-DB_PATH = os.path.join(config.OUTPUT_DIR, "support_tickets.db")
-
-# Mirrors the locked schema in project_context.md, including the FK and
-# CHECK constraints DuckDB enforces at insert time below.
-SCHEMA_SQL = """
+# SQL statements to recreate tables
+CREATE_CUSTOMERS_TABLE = """
 CREATE TABLE customers (
-    customer_id     INTEGER PRIMARY KEY,
-    customer_name   VARCHAR NOT NULL,
-    email           VARCHAR NOT NULL,
-    phone_number    VARCHAR NOT NULL,
-    city            VARCHAR NOT NULL,
-    state           VARCHAR NOT NULL,
-    signup_date     DATE NOT NULL
-);
-
-CREATE TABLE products (
-    product_id      INTEGER PRIMARY KEY,
-    product_name    VARCHAR NOT NULL,
-    line            VARCHAR NOT NULL,
-    category        VARCHAR NOT NULL
-);
-
-CREATE TABLE employees (
-    employee_id     INTEGER PRIMARY KEY,
-    employee_name   VARCHAR NOT NULL,
-    hire_date       DATE NOT NULL,
-    supervisor_name VARCHAR NOT NULL,
-    manager_name    VARCHAR NOT NULL,
-    director_name   VARCHAR NOT NULL
-);
-
-CREATE TABLE tickets (
-    ticket_id           INTEGER PRIMARY KEY,
-    customer_id         INTEGER NOT NULL REFERENCES customers (customer_id),
-    product_id          INTEGER NOT NULL REFERENCES products (product_id),
-    initial_employee_id INTEGER NOT NULL REFERENCES employees (employee_id),
-    status              VARCHAR NOT NULL CHECK (status IN ('open', 'closed'))
-);
-
-CREATE TABLE ticket_notes (
-    ticket_note_id  INTEGER PRIMARY KEY,
-    ticket_id       INTEGER NOT NULL REFERENCES tickets (ticket_id),
-    employee_id     INTEGER NOT NULL REFERENCES employees (employee_id),
-    category        VARCHAR NOT NULL CHECK (
-        category IN (
-            'general_information',
-            'follow_up',
-            'escalation',
-            'escalation_resolved',
-            'resolved'
-        )
-    ),
-    created_tstmp   TIMESTAMP NOT NULL
+    customer_id VARCHAR PRIMARY KEY,
+    customer_name VARCHAR NOT NULL,
+    email VARCHAR NOT NULL,
+    phone_number VARCHAR,
+    city VARCHAR,
+    state VARCHAR,
+    signup_date DATE NOT NULL
 );
 """
 
-LOAD_ORDER = ["customers", "products", "employees", "tickets", "ticket_notes"]
+CREATE_PRODUCTS_TABLE = """
+CREATE TABLE products (
+    product_id VARCHAR PRIMARY KEY,
+    product_name VARCHAR NOT NULL,
+    line VARCHAR NOT NULL,
+    category VARCHAR NOT NULL
+);
+"""
 
+CREATE_EMPLOYEES_TABLE = """
+CREATE TABLE employees (
+    employee_id VARCHAR PRIMARY KEY,
+    employee_name VARCHAR NOT NULL,
+    hire_date DATE NOT NULL,
+    supervisor_name VARCHAR NOT NULL,
+    manager_name VARCHAR NOT NULL,
+    director_name VARCHAR NOT NULL
+);
+"""
 
-def main():
-    # Always rebuild from scratch so the schema/constraints and data stay
-    # in sync with whatever CSVs are currently in data/.
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
+CREATE_TICKETS_TABLE = """
+CREATE TABLE tickets (
+    ticket_id VARCHAR PRIMARY KEY,
+    customer_id VARCHAR NOT NULL REFERENCES customers(customer_id),
+    product_id VARCHAR NOT NULL REFERENCES products(product_id),
+    initial_employee_id VARCHAR NOT NULL REFERENCES employees(employee_id),
+    status VARCHAR NOT NULL CHECK (status IN ('open', 'closed'))
+);
+"""
 
-    con = duckdb.connect(DB_PATH)
-    con.execute(SCHEMA_SQL)
+CREATE_TICKET_NOTES_TABLE = """
+CREATE TABLE ticket_notes (
+    ticket_note_id VARCHAR PRIMARY KEY,
+    ticket_id VARCHAR NOT NULL REFERENCES tickets(ticket_id),
+    employee_id VARCHAR NOT NULL REFERENCES employees(employee_id),
+    category VARCHAR NOT NULL CHECK (
+        category IN ('general_information', 'follow_up', 'escalation', 'escalation_resolved', 'resolved')
+    ),
+    created_tstmp TIMESTAMP NOT NULL
+);
+"""
 
-    # Parent tables must load before the tables that reference them, or the
-    # FK constraints below will reject the inserts.
-    for table in LOAD_ORDER:
-        csv_path = os.path.join(config.OUTPUT_DIR, f"{table}.csv")
-        con.execute(f"INSERT INTO {table} SELECT * FROM read_csv_auto('{csv_path}')")
-
-    print(f"Built {DB_PATH}")
-    for table in LOAD_ORDER:
-        count = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        print(f"  {table}: {count:,} rows")
-
-    con.close()
-
+def build_database():
+    """
+    Creates DuckDB database at data/support_tickets.db and loads generated CSV facts/dimensions.
+    """
+    print(f"Connecting to DuckDB at {DB_PATH}...")
+    conn = duckdb.connect(str(DB_PATH))
+    
+    try:
+        # Drop existing tables in reverse FK order
+        print("Dropping old tables if present...")
+        conn.execute("DROP TABLE IF EXISTS ticket_notes;")
+        conn.execute("DROP TABLE IF EXISTS tickets;")
+        conn.execute("DROP TABLE IF EXISTS employees;")
+        conn.execute("DROP TABLE IF EXISTS products;")
+        conn.execute("DROP TABLE IF EXISTS customers;")
+        
+        # Create dimension tables
+        print("Creating dimension tables...")
+        conn.execute(CREATE_CUSTOMERS_TABLE)
+        conn.execute(CREATE_PRODUCTS_TABLE)
+        conn.execute(CREATE_EMPLOYEES_TABLE)
+        
+        # Create fact tables
+        print("Creating fact tables...")
+        conn.execute(CREATE_TICKETS_TABLE)
+        conn.execute(CREATE_TICKET_NOTES_TABLE)
+        
+        # Load CSV data into DuckDB tables
+        print("Loading CSV files into DuckDB...")
+        conn.execute(f"COPY customers FROM '{(DATA_DIR / 'customers.csv').as_posix()}' (HEADER, AUTO_DETECT);")
+        conn.execute(f"COPY products FROM '{(DATA_DIR / 'products.csv').as_posix()}' (HEADER, AUTO_DETECT);")
+        conn.execute(f"COPY employees FROM '{(DATA_DIR / 'employees.csv').as_posix()}' (HEADER, AUTO_DETECT);")
+        conn.execute(f"COPY tickets FROM '{(DATA_DIR / 'tickets.csv').as_posix()}' (HEADER, AUTO_DETECT);")
+        conn.execute(f"COPY ticket_notes FROM '{(DATA_DIR / 'ticket_notes.csv').as_posix()}' (HEADER, AUTO_DETECT);")
+        
+        print("\n--- Database Built Successfully! ---")
+        
+        # Print table row summary
+        for table in ["customers", "products", "employees", "tickets", "ticket_notes"]:
+            count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            print(f"Table '{table}': {count:,} rows")
+            
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
-    main()
+    build_database()

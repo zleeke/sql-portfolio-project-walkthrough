@@ -1,6 +1,5 @@
 import pandas as pd
 import random as rnd
-import datetime as dt
 import re
 import zipcodes
 from faker import Faker

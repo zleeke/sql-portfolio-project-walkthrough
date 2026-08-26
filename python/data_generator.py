@@ -1,7 +1,17 @@
 import time
-from create_dimension_tables import generate_products, generate_employees, generate_customers
-from create_fact_tables import generate_tickets_and_notes
-from create_database import build_database
+import importlib
+
+# Dynamic imports for modules starting with numbers
+mod_dim = importlib.import_module("01_create_dimension_tables")
+generate_products = mod_dim.generate_products
+generate_employees = mod_dim.generate_employees
+generate_customers = mod_dim.generate_customers
+
+mod_fact = importlib.import_module("02_create_fact_tables")
+generate_tickets_and_notes = mod_fact.generate_tickets_and_notes
+
+mod_db = importlib.import_module("03_create_database")
+build_database = mod_db.build_database
 
 def main():
     print("==================================================")

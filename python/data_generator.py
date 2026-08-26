@@ -1,7 +1,7 @@
 import time
 from create_dimension_tables import generate_products, generate_employees, generate_customers
 from create_fact_tables import generate_tickets_and_notes
-from python.create_database import build_database
+from create_database import build_database
 
 def main():
     print("==================================================")

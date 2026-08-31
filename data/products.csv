@@ -1,0 +1,14 @@
+product_id,product_name,line,category
+PROD_001,Smart Thermostat Pro,Smart Home,Climate
+PROD_002,Smart Air Purifier,Smart Home,Climate
+PROD_003,HD Doorbell Camera,Smart Home,Security
+PROD_004,Outdoor Floodlight Cam,Smart Home,Security
+PROD_005,Smart Door Lock,Smart Home,Security
+PROD_006,Wireless Noise-Canceling Headphones,Personal Tech,Audio
+PROD_007,Pro Earbuds,Personal Tech,Audio
+PROD_008,Fitness Tracker Watch,Personal Tech,Wearables
+PROD_009,Smart Health Ring,Personal Tech,Wearables
+PROD_010,Air Fryer Deluxe,Kitchen Appliances,Cooking
+PROD_011,Smart Pressure Cooker,Kitchen Appliances,Cooking
+PROD_012,Espresso Machine Pro,Kitchen Appliances,Beverage
+PROD_013,Smart Coffee Maker,Kitchen Appliances,Beverage

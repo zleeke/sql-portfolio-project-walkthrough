@@ -91,7 +91,7 @@ def generate_tickets_and_notes(num_tickets):
         emp_director = employee_dict[emp_id]
         
         # Determine escalation probability for this ticket based on segment tuning
-        escalation_prob = 0.08  # Default 15% escalation rate
+        escalation_prob = 0.08  # Default 8% escalation rate
         if prod_line == underperforming_line or emp_director == underperforming_director:
             escalation_prob = 0.13  # Higher escalation rate for underperforming segment
         elif prod_line == overperforming_line or emp_director == overperforming_director:

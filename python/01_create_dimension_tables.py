@@ -41,7 +41,7 @@ def generate_products():
         {"line": "Kitchen Appliances", "category": "Beverage", "product_name": "Espresso Machine Pro"},
         {"line": "Kitchen Appliances", "category": "Beverage", "product_name": "Smart Coffee Maker"}
     ]
-    
+
     products_list = []
     
     # 2. Loop through and assign product_id
@@ -163,3 +163,4 @@ if __name__ == "__main__":
     print("Customers data generated successfully!")
     print(customers_df)
     
+

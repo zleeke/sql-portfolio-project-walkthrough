@@ -20,6 +20,7 @@
     - Always add comments to any Python scripts you write or edit, explaining what each part of the code is doing and why, so I can learn from it.
 - At the end of this project I want to have code that I can share with prospective employers so they can understand my SQL capabilities.
 - Additionally, I do want to create an HTML dashboard as well that visualizes the data in my database and host it on GitHub.
+- I will be documenting this project as a series of YouTube videos shared on LinkedIn, walking through my design decisions and SQL techniques. Teaching the material reinforces my own mastery of it, and it doubles as a way to showcase my technical communication and SQL skills to potential employers.
 
 # Business Problem
 - The business: A contact center that handles support tickets from customers about products that they have purchased from us. When a customer calls in for assistance with a product, an initial ticket is opened and a ticket note is recorded for the interaction. If the customer calls in to follow-up on the ticket, additional notes are entered as well. We are most focused on analyzing what happens when the customer calls in to complain about a product. We'll refer to these as escalations throughout the project.
